@@ -69,11 +69,14 @@ The extension reads the WebM version of the song's Canvas that Spotify streams i
 segments into a looping clip and plays it behind the app (the plain `.mp4` Canvas link can't be
 decoded by Spotify's desktop build). The rest is CSS: Spotify's background colour tokens are made
 transparent and its panels are re-drawn as glass. Spotify's class names are scrambled and change
-between versions, so the lyric line classes are discovered at runtime from Spotify's own stylesheet.
+between versions, so the theme hangs on the things that do not: element ids, test ids and classes
+the extension tags itself. The lyric line classes are discovered at runtime from Spotify's own
+stylesheet, and the surfaces Spotify leaves unnamed are found by their shape and tagged in script.
 
 ## Notes
 
 - Windows only, and it needs the Spotify desktop app.
+- Tested against Spotify 1.3.3. After a Spotify update, run `Install.bat` again to re-apply it.
 - Spotify's lyrics only say which line is playing, not which word, so there is no word-by-word
   highlight. For that, see the
   [Beautiful Lyrics](https://github.com/surfbryce/beautiful-lyrics) extension.

@@ -2,7 +2,7 @@
 // DESCRIPTION: Plays the current song's Canvas video (blurred + liquid-distorted) behind the
 //              whole Spotify window, turns every panel into Apple-style "liquid glass", and gives
 //              the lyrics a soft glow on the current line. Falls back to animated album art.
-// VERSION: 7.2.0
+// VERSION: 7.3.0
 
 (function LiquidGlassSpotify() {
   const S = window.Spicetify;
@@ -30,6 +30,11 @@
   const LITE_KEY = "liquid-glass-lite";
   const NPV_LYRICS = '[data-testid="lyrics-npv-section"]';
   const ROOT = '[style*="--lyrics-color-active"]'; // Spotify's lyrics roots carry these inline vars
+  // Spotify renames its hashed class names between versions, so prefer element ids and test ids
+  // and keep the old class names next to them as fallbacks for earlier builds.
+  const MAIN = "#main-view, .Root__main-view";
+  const PANEL = "#Desktop_PanelContainer_Id, aside.NowPlayingView";
+  const PANES = MAIN + ", " + PANEL;
 
   // Clean up a previous copy (hot reload)
   if (window.__lgCleanup) window.__lgCleanup();
@@ -96,10 +101,15 @@
   /* (Spotify's own layering is left alone, so popups opened outside #main - "Shared with",
      playlist dialogs, the watch feed - stay above the app like Spotify intended) */
 
-  /* ===== Frame: see-through ===== */
+  /* ===== Frame: see-through =====
+     Spotify renames its internal classes between versions, so the theme leans on things that don't
+     change: element ids (#main-view, #Desktop_LeftSidebar_Id, #Desktop_PanelContainer_Id), test ids,
+     and classes the extension tags itself (lg-*). The older class names are kept as fallbacks so
+     this still works on previous Spotify builds. */
   .Root__top-container,
   .Root__globalNav,
   .Root__now-playing-bar,
+  .lg-playerbar,
   .Root__nav-bar,
   .main-yourLibraryX-entryPoints,
   .main-nowPlayingBar-container,
@@ -165,6 +175,7 @@
   /* Never tint floating controls inside a lyrics view (e.g. the Sync row) */
   ${ROOT} .lg-sticky, ${ROOT} .lg-top { background: none !important; backdrop-filter: none !important; box-shadow: none !important; }
   /* Lyrics button lights up while the lyrics are open in the middle column */
+  body.${ON} [data-testid="now-playing-bar"] [data-testid="lyrics-button"],
   body.${ON} .Root__now-playing-bar [data-testid="lyrics-button"] { color: #1ed760 !important; }
   /* The Lite/Full toggle (droplet) gets the same round glass button */
   .Root__globalNav button[aria-label^="Liquid Glass"] {
@@ -263,9 +274,11 @@
 
   /* ===== Big panels become liquid glass (library, main view, every right-hand panel:
      Now Playing, Queue, Connect, Friend activity...) ===== */
+  #Desktop_LeftSidebar_Id,
+  #main-view,
+  #Desktop_PanelContainer_Id,
   .main-yourLibraryX-libraryContainer,
   .Root__main-view,
-  #Desktop_PanelContainer_Id,
   aside.NowPlayingView {
     ${GLASS}
     border-radius: 16px !important;
@@ -360,12 +373,14 @@
   /* Side-panel header ("My Playlist"): keep Spotify's own layout and padding untouched, and draw
      the glass strip as a layer behind it that reaches the panel's edges (the panel clips it to
      its rounded corners). */
+  .lg-npv-head,
   aside .main-nowPlayingView-headerWrapper {
     background: none !important;
     backdrop-filter: none !important;
     isolation: isolate;
     text-shadow: 0 1px 10px rgba(0,0,0,.45);
   }
+  .lg-npv-head::before,
   aside .main-nowPlayingView-headerWrapper::before {
     content: ""; position: absolute; top: 0; bottom: 0; left: -24px; right: -24px;
     z-index: -1; pointer-events: none;
@@ -378,8 +393,15 @@
      paint-contained header, which leaves its backdrop blur seeing only black. Lift it to z-index 0
      (content above it) so it frosts the list scrolling underneath */
   .main-topBar-container { contain: none !important; }
-  .main-topBar-container > *:not(.main-topBar-background) { position: relative; z-index: 1; }
+  /* The background layer is absolutely positioned - never give it "position: relative", that
+     collapses it to nothing. On new builds it has no class name, only the inline tokens. */
+  .main-topBar-container > *:not(.main-topBar-background):not([style*="--background-base"]) {
+    position: relative; z-index: 1;
+  }
+  /* Its inner dark overlay (rgba(0,0,0,.6)) would hide the frosted glass */
+  .main-topBar-container > .lg-soft[style*="--background-base"] * { background: none !important; }
   .Root__main-view .main-topBar-background,
+  #main-view .lg-soft[style*="--background-base"],
   .lg-soft[style*="opacity"][style*="--background-base"] {
     z-index: 0 !important;
     background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)), rgba(20,20,26,.18) !important;
@@ -403,6 +425,7 @@
     backdrop-filter: blur(40px) saturate(185%);
   }
   /* Spotify's own page backgrounds inside the panels */
+  #main-view, #Desktop_LeftSidebar_Id, #Desktop_PanelContainer_Id,
   .Root__main-view, aside.NowPlayingView, .main-yourLibraryX-libraryContainer {
     --background-base: transparent !important;
   }
@@ -416,27 +439,34 @@
 
   /* Spotify's own sharp Canvas at the top of the side panel: fade it into the glass
      instead of ending in a hard dark edge behind the cards */
+  .lg-npv-canvas,
   aside.NowPlayingView .main-nowPlayingView-canvasVisualEnhancement {
     -webkit-mask-image: linear-gradient(#000 0%, rgba(0,0,0,.85) 35%, transparent 62%) !important;
     mask-image: linear-gradient(#000 0%, rgba(0,0,0,.85) 35%, transparent 62%) !important;
   }
-  /* Spotify darkens the canvas and the song-title area with #121212 gradients - remove them */
+  /* Spotify darkens the canvas and the song-title area with dark gradients - remove them.
+     Newer builds use plain overlay divs instead of pseudo-elements, which JS tags as .lg-dim. */
+  .lg-dim { background-image: none !important; background-color: transparent !important; }
   aside.NowPlayingView .main-nowPlayingView-canvasVisualEnhancement::before,
   aside.NowPlayingView .main-nowPlayingView-canvasVisualEnhancement::after,
   aside.NowPlayingView .main-nowPlayingView-contextItemInfo::before,
   aside.NowPlayingView .main-nowPlayingView-contextItemInfo::after { background: none !important; }
   aside.NowPlayingView .main-nowPlayingView-contextItemInfo { text-shadow: 0 1px 12px rgba(0,0,0,.5); }
   /* Side-panel title bar: no dark band */
+  .lg-npv-head *,
   aside.NowPlayingView .main-nowPlayingView-headerWrapper * { background: transparent !important; }
 
   /* Side-panel cards (lyrics, artist, credits, queue) */
+  .lg-card,
   aside.NowPlayingView .main-nowPlayingView-section {
     ${SUB_GLASS}
+    position: relative;
     border-radius: 20px !important;
     overflow: hidden;
     isolation: isolate;
   }
   /* Sheen sits behind the card's content (z-index -1 inside the isolated card) */
+  .lg-card::before,
   aside.NowPlayingView .main-nowPlayingView-section::before {
     content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; z-index: -1;
     background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,.08) 48%, transparent 60%);
@@ -444,6 +474,7 @@
     animation: lg-sheen 10s ease-in-out infinite;
   }
   /* Solid grey inner panels (artist card etc.) -> let the glass show; buttons keep their colours */
+  .lg-card div:not([class*="encore-inverted"]),
   aside.NowPlayingView .main-nowPlayingView-section div { background-color: transparent !important; }
 
   /* ===== Lyrics colour variables (full page + side panel) ===== */
@@ -484,7 +515,7 @@
   }
   body.${LITE} [role="tooltip"] { backdrop-filter: blur(8px) saturate(130%) !important; }
   body.${LITE} .lg-sticky, body.${LITE} .main-trackList-trackListHeader,
-  body.${LITE} aside .main-nowPlayingView-headerWrapper::before, body.${LITE} .lg-top,
+  body.${LITE} .lg-npv-head::before, body.${LITE} aside .main-nowPlayingView-headerWrapper::before, body.${LITE} .lg-top,
   body.${LITE} .Root__main-view .main-topBar-background,
   body.${LITE} .lg-soft[style*="opacity"][style*="--background-base"] {
     backdrop-filter: blur(8px) saturate(130%) !important;
@@ -870,7 +901,7 @@
   // The full-screen lyrics button is left exactly as Spotify made it.
   const isLyricsBtn = (e) => {
     const b = e.target && e.target.closest && e.target.closest('[data-testid="lyrics-button"]');
-    return !!(b && b.closest(".Root__now-playing-bar"));
+    return !!(b && b.closest('[data-testid="now-playing-bar"], .Root__now-playing-bar'));
   };
   const overlayOpen = () => !!document.querySelector('[style*="--cinema-mode-bg-color"]');
   // Spotify acts on press (pointer/mouse down), not click - so decide at press time and block
@@ -900,7 +931,7 @@
 
   // Spotify paints full-width coloured headers with inline styles and hashed classes - tag them.
   function softenHeaders() {
-    const main = document.querySelector(".Root__main-view");
+    const main = document.querySelector(MAIN);
     if (!main) return;
     const w = main.clientWidth;
     main.querySelectorAll('[style*="background-color"], [style*="--background-base"]').forEach((el) => {
@@ -919,7 +950,7 @@
   // Sticky bars (e.g. Home's All/Music/Podcasts chips) relied on the dark base colour;
   // now that it's transparent, give them a frosted glass so content doesn't show through.
   function glassStickyBars() {
-    document.querySelectorAll(".Root__main-view div, #Desktop_PanelContainer_Id div").forEach((el) => {
+    document.querySelectorAll(PANES.split(", ").map((s) => s + " div").join(", ")).forEach((el) => {
       // Lyrics views have their own floating controls (e.g. the Sync row) - never tint those
       if (el.closest(ROOT)) { el.classList.remove("lg-sticky", "lg-top"); return; }
       if (el.classList.contains("lg-top")) return;
@@ -927,14 +958,63 @@
       const r = el.getBoundingClientRect();
       if (r.height > 0 && r.height < 140 && r.width > 200) {
         el.classList.add("lg-sticky");
-        const panel = el.closest(".Root__main-view, #Desktop_PanelContainer_Id");
+        const panel = el.closest(PANES);
         if (panel && Math.abs(r.top - panel.getBoundingClientRect().top) < 6) el.classList.add("lg-top");
       }
     });
   }
 
+  // Spotify 1.3.3 dropped the .main-nowPlayingView-* / .Root__now-playing-bar class names and
+  // left only hashed ones, so these surfaces are found by their shape and tagged with our own
+  // classes instead. Older builds still match the class-name rules in the stylesheet above.
+  function tagShell() {
+    // The strip the player bar sits in is a plain black div with no class name of its own
+    const npb = document.querySelector('[data-testid="now-playing-bar"]');
+    if (npb && npb.parentElement) npb.parentElement.classList.add("lg-playerbar");
+
+    const panel = document.querySelector(PANEL);
+    if (!panel) return;
+    const pr = panel.getBoundingClientRect();
+
+    // Title strip pinned to the panel's top edge ("My Playlist", "Queue"...)
+    panel.querySelectorAll("div").forEach((el) => {
+      if (el.classList.contains("lg-npv-head")) return;
+      if (getComputedStyle(el).position !== "absolute") return;
+      const r = el.getBoundingClientRect();
+      if (r.width > pr.width * 0.8 && r.height > 40 && r.height < 90 && Math.abs(r.top - pr.top) < 8) {
+        el.classList.add("lg-npv-head");
+      }
+    });
+
+    // Cards (lyrics, about the artist, credits...): Spotify draws them with the raised-surface
+    // token, which this theme turned into translucent white - that is what identifies them.
+    panel.querySelectorAll("div").forEach((el) => {
+      if (el.classList.contains("lg-card")) return;
+      const r = el.getBoundingClientRect();
+      if (r.width < 180 || r.height < 40) return;
+      if (getComputedStyle(el).backgroundColor === "rgba(255, 255, 255, 0.1)") el.classList.add("lg-card");
+    });
+    const lyr = panel.querySelector(NPV_LYRICS);
+    if (lyr) lyr.classList.add("lg-card");
+
+    // Spotify's own sharp Canvas at the top of the panel, and the dark gradients painted over it
+    const vid = panel.querySelector("video, canvas");
+    const wrap = vid && vid.parentElement;
+    if (wrap) {
+      wrap.classList.add("lg-npv-canvas");
+      const box = wrap.getBoundingClientRect();
+      panel.querySelectorAll("div").forEach((el) => {
+        if (el.classList.contains("lg-dim") || el.childElementCount || el.textContent.trim()) return;
+        const r = el.getBoundingClientRect();
+        if (r.width < 120 || r.top > box.bottom + 40) return;
+        if (getComputedStyle(el).backgroundImage.indexOf("gradient") >= 0) el.classList.add("lg-dim");
+      });
+    }
+  }
+
   function scanPage() {
     refreshDynamicStyles();
+    tagShell();
     softenHeaders();
     glassStickyBars();
     watchLyrics();
