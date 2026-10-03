@@ -1,0 +1,5 @@
+# Keep Windows scripts in CRLF - .bat in particular misbehaves with LF endings
+* text=auto eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.txt text eol=crlf
